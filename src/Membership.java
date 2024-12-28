@@ -9,6 +9,13 @@ public class Membership {
         membership = new ClubMember[maxMembers];
     }
 
+    public ClubMember[] getAllMembers() {
+        // Return a copy of the array containing all current members
+        ClubMember[] allMembers = new ClubMember[numMembers];
+        System.arraycopy(membership, 0, allMembers, 0, numMembers);
+        return allMembers;
+    }    
+
     // Methods
     public int getMaxNumMembers() {
         return membership.length; // how many members can we have in club.

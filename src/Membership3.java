@@ -9,6 +9,10 @@ public class Membership3 extends Membership2 implements java.io.Serializable {
         waitList = new WaitingList();
     }
 
+    public String[] getWaitingListFirst() {
+        return waitList.getFirst();  // Calls the WaitingList's getFirst() method
+    }
+
     public void addMember(String name, String address) {
         try {
             super.addMember(name, address);
@@ -30,4 +34,9 @@ public class Membership3 extends Membership2 implements java.io.Serializable {
     public String toString() {
         return super.toString() + "/n" + waitList.toString();
     }
+
+public Enumeration<String> getWaitListNames() {
+    return waitList.names();
+}
+
 }
