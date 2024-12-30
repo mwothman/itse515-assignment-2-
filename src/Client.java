@@ -1,9 +1,7 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 import java.net.*;
-import java.util.*;
 
 public class Client {
     private static final String SERVER_ADDRESS = "localhost";
@@ -74,11 +72,16 @@ public class Client {
         frame.add(panel, BorderLayout.CENTER);
 
         // Action Listeners
-        searchButton.addActionListener(e -> searchMembers());
-        clearButton.addActionListener(e -> searchField.setText(""));
-        addButton.addActionListener(e -> addMember());
+        searchButton.addActionListener(e -> searchMembers());  // Correct listener for search button
+        clearButton.addActionListener(e -> clearSearchResult());  // Clears the search field
+        addButton.addActionListener(e -> addMember());  // Only triggers add member functionality
 
         frame.setVisible(true);
+    }
+
+    private void clearSearchResult() {
+        searchField.setText("");
+        resultListModel.clear();
     }
 
     private void searchMembers() {
@@ -87,34 +90,45 @@ public class Client {
             out.println("SEARCH:" + searchText);  // Send the search request to the server
             try {
                 String response = in.readLine();
+                resultListModel.clear();  // Clear previous results
+
                 if (response.startsWith("search-results:")) {
                     int count = Integer.parseInt(response.substring(15));
-                    resultListModel.clear();
-                    for (int i = 0; i < count; i++) {
-                        String memberData = in.readLine();
-                        resultListModel.addElement(memberData);
+                    if (count > 0) {
+                        for (int i = 0; i < count; i++) {
+                            String memberData = in.readLine();
+                            resultListModel.addElement(memberData);  // Add each result to the list
+                        }
+                    } else {
+                        resultListModel.addElement("No results found.");
                     }
                 } else {
-                    resultListModel.addElement("No results found.");
+                    resultListModel.addElement("Error retrieving results.");
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+                resultListModel.addElement("Error communicating with server.");
             }
+        } else {
+            JOptionPane.showMessageDialog(null, "Search field cannot be empty.");
         }
     }
 
     private void addMember() {
+        // Get the name and address from the fields
         String name = nameField.getText().trim();
         String address = addressField.getText().trim();
+
+        // Ensure both fields are filled out
         if (!name.isEmpty() && !address.isEmpty()) {
-            out.println("ADD:" + name + "," + address);  // Send the add request to the server
+            out.println("ADD:" + name + "|" + address);  // Send the add request to the server
             try {
                 String response = in.readLine();
                 if ("add-success".equals(response)) {
-                    nameField.setText("");
-                    addressField.setText("");
+                    nameField.setText("");  // Clear the name field
+                    addressField.setText("");  // Clear the address field
                     JOptionPane.showMessageDialog(null, "Member added successfully!");
-                    searchMembers();  // Refresh the list after adding
+                    // No need to refresh the search list
                 } else if ("add-waiting-list".equals(response)) {
                     JOptionPane.showMessageDialog(null, "Membership full. Added to waiting list.");
                 } else {
@@ -123,6 +137,8 @@ public class Client {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        } else {
+            JOptionPane.showMessageDialog(null, "Both name and address are required.");
         }
     }
 }
