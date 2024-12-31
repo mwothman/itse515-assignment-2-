@@ -6,12 +6,16 @@ import java.util.concurrent.*;
 public class Server {
 
     private static final int SERVER_PORT = 12345;
+    private static final String DATA_FILE = "Membership3.data";
     private static final List<String> members = Collections.synchronizedList(new ArrayList<>());
     private static final Queue<String[]> waitingList = new ConcurrentLinkedQueue<>();
 
     public static void main(String[] args) {
+        loadData();
+
         try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
             System.out.println("Server started on port " + SERVER_PORT);
+
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connected: " + clientSocket.getInetAddress().getHostAddress());
@@ -19,6 +23,35 @@ public class Server {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private static void loadData() {
+        File file = new File(DATA_FILE);
+        if (file.exists()) {
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    members.add(line);
+                }
+                System.out.println("Data loaded from " + DATA_FILE);
+            } catch (IOException e) {
+                System.err.println("Error reading data file: " + e.getMessage());
+            }
+        }
+    }
+
+    private static void saveData() {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(DATA_FILE))) {
+            synchronized (members) {
+                for (String member : members) {
+                    writer.write(member);
+                    writer.newLine();
+                }
+            }
+            System.out.println("Data saved to " + DATA_FILE);
+        } catch (IOException e) {
+            System.err.println("Error saving data file: " + e.getMessage());
         }
     }
 
@@ -41,7 +74,9 @@ public class Server {
                 while ((clientRequest = in.readLine()) != null) {
                     System.out.println("Received from " + clientSocket.getInetAddress().getHostAddress() + ": " + clientRequest);
 
-                    if (clientRequest.startsWith("SEARCH:")) {
+                    if (clientRequest.equals("LOAD")) {
+                        handleLoad();
+                    } else if (clientRequest.startsWith("SEARCH:")) {
                         handleSearch(clientRequest.substring(7));
                     } else if (clientRequest.startsWith("ADD:")) {
                         handleAdd(clientRequest.substring(4));
@@ -63,10 +98,17 @@ public class Server {
             }
         }
 
+        private void handleLoad() {
+            synchronized (members) {
+                out.println("load-results:" + members.size());
+                for (String member : members) {
+                    out.println(member);
+                }
+            }
+        }
+
         private void handleSearch(String searchQuery) {
             List<String> searchResults = new ArrayList<>();
-            System.out.println("Search query: " + searchQuery);  // Debug log
-        
             synchronized (members) {
                 for (String member : members) {
                     if (member.toLowerCase().contains(searchQuery.toLowerCase())) {
@@ -74,45 +116,37 @@ public class Server {
                     }
                 }
             }
-        
             out.println("search-results:" + searchResults.size());
             for (String result : searchResults) {
                 out.println(result);
             }
-            System.out.println("Search results sent: " + searchResults);  // Debug log
         }
-        
+
         private void handleAdd(String memberData) {
             try {
-                // Split name and address using the delimiter
                 String[] parts = memberData.split("\\|", 2);
-                System.out.println("Received data: " + memberData); // Debug log
-        
                 if (parts.length == 2) {
                     String name = parts[0].trim();
                     String address = parts[1].trim();
-                    System.out.println("Parsed name: " + name + ", Parsed address: " + address); // Debug log
-        
+
                     synchronized (members) {
                         if (members.size() < 5) {
                             members.add(name + ", " + address);
+                            saveData();
                             out.println("add-success");
                             return;
                         }
                     }
-        
+
                     waitingList.add(new String[]{name, address});
                     out.println("add-waiting-list");
                 } else {
-                    System.out.println("Invalid data format."); // Debug log
                     out.println("Invalid data");
                 }
             } catch (Exception e) {
-                System.out.println("Error processing data: " + e.getMessage()); // Debug log
-                out.println("Error processing data");
                 e.printStackTrace();
+                out.println("Error processing data");
             }
         }
-             
     }
 }

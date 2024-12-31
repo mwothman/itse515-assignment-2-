@@ -17,17 +17,21 @@ public class Client {
     private JTextField nameField, addressField;
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new Client().createAndShowGUI());
+        SwingUtilities.invokeLater(() -> {
+            try {
+                new Client().createAndShowGUI();
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(null, "Unable to connect to the server. Please try again later.");
+                e.printStackTrace();
+            }
+        });
     }
 
-    public Client() {
-        try {
-            socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
-            out = new PrintWriter(socket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public Client() throws IOException {
+        // Initialize socket and I/O streams
+        socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+        out = new PrintWriter(socket.getOutputStream(), true);
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
     }
 
     public void createAndShowGUI() {
@@ -72,11 +76,14 @@ public class Client {
         frame.add(panel, BorderLayout.CENTER);
 
         // Action Listeners
-        searchButton.addActionListener(e -> searchMembers());  // Correct listener for search button
-        clearButton.addActionListener(e -> clearSearchResult());  // Clears the search field
-        addButton.addActionListener(e -> addMember());  // Only triggers add member functionality
+        searchButton.addActionListener(e -> new Thread(this::searchMembers).start());
+        clearButton.addActionListener(e -> clearSearchResult());
+        addButton.addActionListener(e -> new Thread(this::addMember).start());
 
         frame.setVisible(true);
+
+        // Load members upon startup
+        new Thread(this::loadMembers).start();
     }
 
     private void clearSearchResult() {
@@ -84,10 +91,30 @@ public class Client {
         resultListModel.clear();
     }
 
+    private void loadMembers() {
+        out.println("LOAD");
+        try {
+            String response = in.readLine();
+            if (response.startsWith("load-results:")) {
+                int count = Integer.parseInt(response.substring(13));
+                resultListModel.clear();  // Clear existing results
+                for (int i = 0; i < count; i++) {
+                    String member = in.readLine();
+                    resultListModel.addElement(member);  // Add to the results area
+                }
+            } else {
+                SwingUtilities.invokeLater(() -> resultListModel.addElement("Failed to load members."));
+            }
+        } catch (IOException e) {
+            SwingUtilities.invokeLater(() -> resultListModel.addElement("Error loading members."));
+            e.printStackTrace();
+        }
+    }
+
     private void searchMembers() {
         String searchText = searchField.getText().trim();
         if (!searchText.isEmpty()) {
-            out.println("SEARCH:" + searchText);  // Send the search request to the server
+            out.println("SEARCH:" + searchText);
             try {
                 String response = in.readLine();
                 resultListModel.clear();  // Clear previous results
@@ -97,7 +124,7 @@ public class Client {
                     if (count > 0) {
                         for (int i = 0; i < count; i++) {
                             String memberData = in.readLine();
-                            resultListModel.addElement(memberData);  // Add each result to the list
+                            resultListModel.addElement(memberData);
                         }
                     } else {
                         resultListModel.addElement("No results found.");
@@ -106,8 +133,8 @@ public class Client {
                     resultListModel.addElement("Error retrieving results.");
                 }
             } catch (IOException e) {
-                e.printStackTrace();
                 resultListModel.addElement("Error communicating with server.");
+                e.printStackTrace();
             }
         } else {
             JOptionPane.showMessageDialog(null, "Search field cannot be empty.");
@@ -115,26 +142,26 @@ public class Client {
     }
 
     private void addMember() {
-        // Get the name and address from the fields
         String name = nameField.getText().trim();
         String address = addressField.getText().trim();
 
-        // Ensure both fields are filled out
         if (!name.isEmpty() && !address.isEmpty()) {
-            out.println("ADD:" + name + "|" + address);  // Send the add request to the server
+            out.println("ADD:" + name + "|" + address);
             try {
                 String response = in.readLine();
                 if ("add-success".equals(response)) {
-                    nameField.setText("");  // Clear the name field
-                    addressField.setText("");  // Clear the address field
-                    JOptionPane.showMessageDialog(null, "Member added successfully!");
-                    // No need to refresh the search list
+                    SwingUtilities.invokeLater(() -> {
+                        nameField.setText("");
+                        addressField.setText("");
+                        JOptionPane.showMessageDialog(null, "Member added successfully!");
+                    });
                 } else if ("add-waiting-list".equals(response)) {
-                    JOptionPane.showMessageDialog(null, "Membership full. Added to waiting list.");
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Membership full. Added to waiting list."));
                 } else {
-                    JOptionPane.showMessageDialog(null, "Failed to add member: " + response);
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Failed to add member: " + response));
                 }
             } catch (IOException e) {
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error communicating with server."));
                 e.printStackTrace();
             }
         } else {
