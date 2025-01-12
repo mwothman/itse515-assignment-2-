@@ -39,4 +39,9 @@ public Enumeration<String> getWaitListNames() {
     return waitList.names();
 }
 
+public WaitingList getWaitingList() {
+    return waitList;
+}
+
+
 }

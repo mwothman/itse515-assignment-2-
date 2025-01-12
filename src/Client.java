@@ -80,20 +80,20 @@ public class Client {
         frame.add(panel, BorderLayout.CENTER);
 
         // Action Listeners
-        searchButton.addActionListener(e -> new Thread(this::searchMembers).start());
+        searchButton.addActionListener(e -> searchMembers());
         clearButton.addActionListener(e -> clearSearchResult());
-        addButton.addActionListener(e -> new Thread(this::addMember).start());
-        deleteButton.addActionListener(e -> new Thread(this::deleteMember).start());  // Delete Member Action
+        addButton.addActionListener(e -> addMember());
+        deleteButton.addActionListener(e -> deleteMember());
 
         frame.setVisible(true);
 
         // Load members upon startup
-        new Thread(this::loadMembers).start();
+        loadMembers();
     }
 
     private void clearSearchResult() {
         searchField.setText("");
-        resultListModel.clear();
+        loadMembers(); // Refresh data after clearing search
     }
 
     private void loadMembers() {
@@ -102,16 +102,18 @@ public class Client {
             String response = in.readLine();
             if (response.startsWith("load-results:")) {
                 int count = Integer.parseInt(response.substring(13));
-                resultListModel.clear();  // Clear existing results
+                resultListModel.clear();
                 for (int i = 0; i < count; i++) {
                     String member = in.readLine();
-                    resultListModel.addElement(member);  // Add to the results area
+                    resultListModel.addElement(member);
                 }
             } else {
-                SwingUtilities.invokeLater(() -> resultListModel.addElement("Failed to load members."));
+                resultListModel.clear();
+                resultListModel.addElement("Failed to load members.");
             }
         } catch (IOException e) {
-            SwingUtilities.invokeLater(() -> resultListModel.addElement("Error loading members."));
+            resultListModel.clear();
+            resultListModel.addElement("Error loading members.");
             e.printStackTrace();
         }
     }
@@ -122,20 +124,15 @@ public class Client {
             out.println("SEARCH:" + searchText);
             try {
                 String response = in.readLine();
-                resultListModel.clear();  // Clear previous results
+                resultListModel.clear();
 
                 if (response.startsWith("search-results:")) {
                     int count = Integer.parseInt(response.substring(15));
-                    if (count > 0) {
-                        for (int i = 0; i < count; i++) {
-                            String memberData = in.readLine();
-                            resultListModel.addElement(memberData);
-                        }
-                    } else {
-                        resultListModel.addElement("No results found.");
+                    for (int i = 0; i < count; i++) {
+                        resultListModel.addElement(in.readLine());
                     }
                 } else {
-                    resultListModel.addElement("Error retrieving results.");
+                    resultListModel.addElement("No results found.");
                 }
             } catch (IOException e) {
                 resultListModel.addElement("Error communicating with server.");
@@ -155,18 +152,17 @@ public class Client {
             try {
                 String response = in.readLine();
                 if ("add-success".equals(response)) {
-                    SwingUtilities.invokeLater(() -> {
-                        nameField.setText("");
-                        addressField.setText("");
-                        JOptionPane.showMessageDialog(null, "Member added successfully!");
-                    });
+                    JOptionPane.showMessageDialog(null, "Member added successfully!");
+                    nameField.setText("");
+                    addressField.setText("");
+                    loadMembers(); // Refresh data
                 } else if ("add-waiting-list".equals(response)) {
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Membership full. Added to waiting list."));
+                    JOptionPane.showMessageDialog(null, "Membership full. Added to waiting list.");
                 } else {
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Failed to add member: " + response));
+                    JOptionPane.showMessageDialog(null, "Failed to add member: " + response);
                 }
             } catch (IOException e) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error communicating with server."));
+                JOptionPane.showMessageDialog(null, "Error communicating with server.");
                 e.printStackTrace();
             }
         } else {
@@ -177,23 +173,26 @@ public class Client {
     private void deleteMember() {
         String selectedMember = resultList.getSelectedValue();
         if (selectedMember != null) {
-            out.println("DELETE:" + selectedMember);
             try {
+                // Extract the member number from the selected string
+                String[] parts = selectedMember.split("Number=");
+                String memberNumber = parts[1].split(" ")[0]; // Extract the first number
+                out.println("DELETE:" + memberNumber);
+    
                 String response = in.readLine();
                 if ("delete-success".equals(response)) {
-                    SwingUtilities.invokeLater(() -> {
-                        resultListModel.removeElement(selectedMember);
-                        JOptionPane.showMessageDialog(null, "Member deleted successfully!");
-                    });
+                    JOptionPane.showMessageDialog(null, "Member deleted successfully!");
+                    loadMembers(); // Refresh data
                 } else {
-                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Failed to delete member."));
+                    JOptionPane.showMessageDialog(null, "Failed to delete member.");
                 }
-            } catch (IOException e) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error communicating with server."));
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error parsing selected member.");
                 e.printStackTrace();
             }
         } else {
             JOptionPane.showMessageDialog(null, "No member selected for deletion.");
         }
     }
+    
 }

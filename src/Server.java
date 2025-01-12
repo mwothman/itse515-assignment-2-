@@ -1,14 +1,12 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.concurrent.*;
 
 public class Server {
 
     private static final int SERVER_PORT = 12345;
     private static final String DATA_FILE = "Membership3.data";
-    private static final Vector<String> members = new Vector<>();
-    private static final Vector<String[]> waitingList = new Vector<>();
+    private static Membership3 membership;
 
     public static void main(String[] args) {
         loadData();
@@ -29,26 +27,21 @@ public class Server {
     private static void loadData() {
         File file = new File(DATA_FILE);
         if (file.exists()) {
-            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    members.add(line);
-                }
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                membership = (Membership3) ois.readObject();
                 System.out.println("Data loaded from " + DATA_FILE);
-            } catch (IOException e) {
+            } catch (IOException | ClassNotFoundException e) {
                 System.err.println("Error reading data file: " + e.getMessage());
+                membership = new Membership3(5); // Default size if loading fails
             }
+        } else {
+            membership = new Membership3(5); // Default size if file doesn't exist
         }
     }
 
     private static void saveData() {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(DATA_FILE))) {
-            synchronized (members) {
-                for (String member : members) {
-                    writer.write(member);
-                    writer.newLine();
-                }
-            }
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(DATA_FILE))) {
+            oos.writeObject(membership);
             System.out.println("Data saved to " + DATA_FILE);
         } catch (IOException e) {
             System.err.println("Error saving data file: " + e.getMessage());
@@ -72,7 +65,7 @@ public class Server {
 
                 String clientRequest;
                 while ((clientRequest = in.readLine()) != null) {
-                    System.out.println("Received from " + clientSocket.getInetAddress().getHostAddress() + ": " + clientRequest);
+                    System.out.println("Received: " + clientRequest);
 
                     if (clientRequest.equals("LOAD")) {
                         handleLoad();
@@ -80,7 +73,7 @@ public class Server {
                         handleSearch(clientRequest.substring(7));
                     } else if (clientRequest.startsWith("ADD:")) {
                         handleAdd(clientRequest.substring(4));
-                    } else if (clientRequest.startsWith("DELETE:")) {  // Handle delete
+                    } else if (clientRequest.startsWith("DELETE:")) {
                         handleDelete(clientRequest.substring(7));
                     } else if (clientRequest.equals("EXIT")) {
                         break;
@@ -88,11 +81,10 @@ public class Server {
                         out.println("Unknown command");
                     }
                 }
-            } catch (IOException e) {
+            } catch (IOException | MembershipFullException e) {
                 e.printStackTrace();
             } finally {
                 try {
-                    System.out.println("Client disconnected: " + clientSocket.getInetAddress().getHostAddress());
                     clientSocket.close();
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -101,68 +93,70 @@ public class Server {
         }
 
         private void handleLoad() {
-            synchronized (members) {
-                out.println("load-results:" + members.size());
-                for (String member : members) {
-                    out.println(member);
-                }
+            Enumeration<ClubMember> members = membership.getAllMembers();
+            List<String> memberDetails = new ArrayList<>();
+
+            while (members.hasMoreElements()) {
+                memberDetails.add(members.nextElement().toString());
+            }
+
+            out.println("load-results:" + memberDetails.size());
+            for (String detail : memberDetails) {
+                out.println(detail);
             }
         }
 
         private void handleSearch(String searchQuery) {
+            Enumeration<ClubMember> members = membership.getAllMembers();
             List<String> searchResults = new ArrayList<>();
-            synchronized (members) {
-                for (String member : members) {
-                    if (member.toLowerCase().contains(searchQuery.toLowerCase())) {
-                        searchResults.add(member);
-                    }
+
+            while (members.hasMoreElements()) {
+                ClubMember member = members.nextElement();
+                if (member.getName().toLowerCase().contains(searchQuery.toLowerCase())) {
+                    searchResults.add(member.toString());
                 }
             }
+
             out.println("search-results:" + searchResults.size());
             for (String result : searchResults) {
                 out.println(result);
             }
         }
 
-        private void handleAdd(String memberData) {
+        private void handleAdd(String memberData) throws MembershipFullException {
             try {
                 String[] parts = memberData.split("\\|", 2);
                 if (parts.length == 2) {
                     String name = parts[0].trim();
                     String address = parts[1].trim();
 
-                    synchronized (members) {
-                        if (members.size() < 5) {
-                            members.add(name + ", " + address);
-                            saveData();
-                            out.println("add-success");
-                            return;
-                        }
-                    }
-
-                    // Add to waiting list using Vector
-                    waitingList.add(new String[]{name, address});
-                    out.println("add-waiting-list");
+                    membership.addMember(name, address);
+                    saveData();
+                    out.println("add-success");
                 } else {
                     out.println("Invalid data");
                 }
             } catch (Exception e) {
                 e.printStackTrace();
-                out.println("Error processing data");
+                out.println("Error adding member");
             }
         }
 
-        private void handleDelete(String memberName) {
-            synchronized (members) {
-                boolean memberRemoved = members.removeIf(member -> member.equalsIgnoreCase(memberName));
-                
-                if (memberRemoved) {
-                    saveData();
-                    out.println("delete-success");
-                } else {
-                    out.println("delete-fail");
-                }
+        private void handleDelete(String memberNumberStr) {
+            try {
+                int memberNumber = Integer.parseInt(memberNumberStr.trim());
+                membership.removeMember(memberNumber);  // Call Membership3's remove method
+                saveData();
+                out.println("delete-success");
+            } catch (NumberFormatException e) {
+                out.println("Invalid member number");
+            } catch (InvalidMemberNumberException e) {
+                out.println(e.getMessage());
+            } catch (Exception e) {
+                e.printStackTrace();
+                out.println("Error deleting member");
             }
         }
+        
     }
 }
