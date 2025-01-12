@@ -7,8 +7,8 @@ public class Server {
 
     private static final int SERVER_PORT = 12345;
     private static final String DATA_FILE = "Membership3.data";
-    private static final List<String> members = Collections.synchronizedList(new ArrayList<>());
-    private static final Queue<String[]> waitingList = new ConcurrentLinkedQueue<>();
+    private static final Vector<String> members = new Vector<>();
+    private static final Vector<String[]> waitingList = new Vector<>();
 
     public static void main(String[] args) {
         loadData();
@@ -80,6 +80,8 @@ public class Server {
                         handleSearch(clientRequest.substring(7));
                     } else if (clientRequest.startsWith("ADD:")) {
                         handleAdd(clientRequest.substring(4));
+                    } else if (clientRequest.startsWith("DELETE:")) {  // Handle delete
+                        handleDelete(clientRequest.substring(7));
                     } else if (clientRequest.equals("EXIT")) {
                         break;
                     } else {
@@ -138,6 +140,7 @@ public class Server {
                         }
                     }
 
+                    // Add to waiting list using Vector
                     waitingList.add(new String[]{name, address});
                     out.println("add-waiting-list");
                 } else {
@@ -146,6 +149,19 @@ public class Server {
             } catch (Exception e) {
                 e.printStackTrace();
                 out.println("Error processing data");
+            }
+        }
+
+        private void handleDelete(String memberName) {
+            synchronized (members) {
+                boolean memberRemoved = members.removeIf(member -> member.equalsIgnoreCase(memberName));
+                
+                if (memberRemoved) {
+                    saveData();
+                    out.println("delete-success");
+                } else {
+                    out.println("delete-fail");
+                }
             }
         }
     }

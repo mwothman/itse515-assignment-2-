@@ -11,7 +11,7 @@ public class Client {
     private BufferedReader in;
 
     private JTextField searchField;
-    private JButton searchButton, clearButton, addButton;
+    private JButton searchButton, clearButton, addButton, deleteButton;
     private JList<String> resultList;
     private DefaultListModel<String> resultListModel;
     private JTextField nameField, addressField;
@@ -73,12 +73,17 @@ public class Client {
         addPanel.add(addButton);
         panel.add(addPanel);
 
+        // Delete Member Section
+        deleteButton = new JButton("Delete Member");
+        panel.add(deleteButton);
+
         frame.add(panel, BorderLayout.CENTER);
 
         // Action Listeners
         searchButton.addActionListener(e -> new Thread(this::searchMembers).start());
         clearButton.addActionListener(e -> clearSearchResult());
         addButton.addActionListener(e -> new Thread(this::addMember).start());
+        deleteButton.addActionListener(e -> new Thread(this::deleteMember).start());  // Delete Member Action
 
         frame.setVisible(true);
 
@@ -166,6 +171,29 @@ public class Client {
             }
         } else {
             JOptionPane.showMessageDialog(null, "Both name and address are required.");
+        }
+    }
+
+    private void deleteMember() {
+        String selectedMember = resultList.getSelectedValue();
+        if (selectedMember != null) {
+            out.println("DELETE:" + selectedMember);
+            try {
+                String response = in.readLine();
+                if ("delete-success".equals(response)) {
+                    SwingUtilities.invokeLater(() -> {
+                        resultListModel.removeElement(selectedMember);
+                        JOptionPane.showMessageDialog(null, "Member deleted successfully!");
+                    });
+                } else {
+                    SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Failed to delete member."));
+                }
+            } catch (IOException e) {
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error communicating with server."));
+                e.printStackTrace();
+            }
+        } else {
+            JOptionPane.showMessageDialog(null, "No member selected for deletion.");
         }
     }
 }
